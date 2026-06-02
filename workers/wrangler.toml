@@ -1,0 +1,19 @@
+name = "deslizadores-api"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Cron: actualizar cotización cada día a las 10:00 ART (13:00 UTC)
+[triggers]
+crons = ["0 13 * * *"]
+
+# Variables públicas (no secretos) — los secretos van con: wrangler secret put NOMBRE
+# [vars]
+# APP_FRONTEND_URL = "https://deslizadores3d.pages.dev"
+
+# SECRETS a configurar con `wrangler secret put`:
+#   - ML_CLIENT_ID
+#   - ML_CLIENT_SECRET
+#   - ML_REDIRECT_URI
+#   - SUPABASE_URL
+#   - SUPABASE_SERVICE_ROLE_KEY
+#   - APP_FRONTEND_URL  (también funciona como var)
