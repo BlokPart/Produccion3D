@@ -2,7 +2,7 @@
    LAYOUT — Sidebar, topbar, grid de contenido
    ============================================================================ */
 
-.app {
+#app {
   display: grid;
   grid-template-columns: 240px 1fr;
   grid-template-rows: 64px 1fr;
@@ -165,7 +165,7 @@
 }
 
 @media (max-width: 880px) {
-  .app {
+  #app {
     grid-template-columns: 1fr;
     grid-template-areas: "topbar" "main";
   }
