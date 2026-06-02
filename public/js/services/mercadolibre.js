@@ -13,9 +13,10 @@ async function authHeader() {
 }
 
 export async function iniciarOAuth() {
-  const headers = await authHeader();
-  const token = headers.Authorization.split(' ')[1];
-  window.location.href = `${WORKER_URL}/api/ml/oauth/start?token=${token}`;
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error('No autenticado');
+  window.location.href = `${WORKER_URL}/api/ml/oauth/start?user_id=${userId}`;
 }
 
 export async function syncManual() {
