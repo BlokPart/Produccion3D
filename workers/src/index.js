@@ -82,8 +82,8 @@ async function mlOAuthCallback(req, env) {
   // Intercambiar código por tokens
   const tokenRes = await fetch(ML_TOKEN_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({
       grant_type: 'authorization_code',
       client_id: env.ML_CLIENT_ID,
       client_secret: env.ML_CLIENT_SECRET,
@@ -92,10 +92,9 @@ async function mlOAuthCallback(req, env) {
     }),
   });
 
- if (!tokenRes.ok) {
-  const errText = await tokenRes.text();
-  return new Response(`Error obteniendo token [client_id usado: ${env.ML_CLIENT_ID}]: ${errText}`, { status: 500 });
-}
+  if (!tokenRes.ok) {
+    return new Response('Error obteniendo token: ' + await tokenRes.text(), { status: 500 });
+  }
   const tok = await tokenRes.json();
   const expiresAt = new Date(Date.now() + tok.expires_in * 1000).toISOString();
 
