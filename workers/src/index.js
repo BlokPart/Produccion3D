@@ -80,23 +80,30 @@ async function mlOAuthCallback(req, env) {
   if (!code || !userId) return new Response('Parámetros faltantes', { status: 400 });
 
   // Intercambiar código por tokens
+  const params = new URLSearchParams();
+  params.append('grant_type', 'authorization_code');
+  params.append('client_id', env.ML_CLIENT_ID);
+  params.append('client_secret', env.ML_CLIENT_SECRET);
+  params.append('code', code);
+  params.append('redirect_uri', env.ML_REDIRECT_URI);
+
   const tokenRes = await fetch(ML_TOKEN_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({
-      grant_type: 'authorization_code',
-      client_id: env.ML_CLIENT_ID,
-      client_secret: env.ML_CLIENT_SECRET,
-      code,
-      redirect_uri: env.ML_REDIRECT_URI,
-    }),
+    headers: { 
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+    },
+    body: params.toString(),
   });
 
+  const tokenText = await tokenRes.text();
   if (!tokenRes.ok) {
-    return new Response('Error obteniendo token: ' + await tokenRes.text(), { status: 500 });
+    return new Response(`Error obteniendo token [${tokenRes.status}]: ${tokenText}`, { status: 500 });
   }
-  const tok = await tokenRes.json();
-  const expiresAt = new Date(Date.now() + tok.expires_in * 1000).toISOString();
+  let tok;
+  try { tok = JSON.parse(tokenText); }
+  catch(e) { return new Response(`Respuesta inválida de ML: ${tokenText}`, { status: 500 }); }
+  const expiresAt = new Date(Date.now() + (tok.expires_in || 21600) * 1000).toISOString();
 
   // Guardar en Supabase (upsert)
   await sb(env, '/ml_integracion', {
