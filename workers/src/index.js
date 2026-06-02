@@ -197,20 +197,24 @@ async function mlSync(req, env) {
 
       // Insertar/upsert en Supabase. RLS no aplica con service_role.
       const rows = results.map(o => ({
-        user_id: userId,
-        canal: 'mercadolibre',
-        ml_order_id: String(o.id),
-        ml_pack_id: o.pack_id ? String(o.pack_id) : null,
-        fecha: (o.date_closed || o.date_created || '').slice(0, 10),
-        cantidad: (o.order_items?.[0]?.quantity) || 1,
-        precio_unitario: o.order_items?.[0]?.unit_price || 0,
-        moneda: o.currency_id || 'ARS',
-        comision_ml: o.order_items?.[0]?.sale_fee || 0,
-        costo_envio: o.shipping?.cost || 0,
-        comprador: o.buyer?.nickname || null,
-        // producto_id queda null — el usuario debe linkear manualmente, o
-        // se puede agregar lógica de matching por SKU/título.
-      }));
+  user_id: userId,
+  canal: 'mercadolibre',
+  ml_order_id: String(o.id),
+  ml_pack_id: o.pack_id ? String(o.pack_id) : null,
+  fecha: (o.date_closed || o.date_created || '').slice(0, 10),
+  cantidad: (o.order_items?.[0]?.quantity) || 1,
+  precio_unitario_ars: o.order_items?.[0]?.unit_price || 0,
+  descuento_ars: 0,
+  descuento_ml_ars: o.order_items?.[0]?.sale_fee || 0,
+  descuento_iibb_ars: 0,
+  descuento_otros_ars: 0,
+  moneda: o.currency_id || 'ARS',
+  comision_ml: o.order_items?.[0]?.sale_fee || 0,
+  costo_envio: o.shipping?.cost || 0,
+  comprador: o.buyer?.nickname || null,
+  cliente_nombre: o.buyer?.nickname || null,
+  costo_total_snapshot: 0,
+}));
 
       await sb(env, '/ventas', {
         method: 'POST',
