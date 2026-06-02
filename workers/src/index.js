@@ -108,9 +108,9 @@ async function mlOAuthCallback(req, env) {
   const expiresAt = new Date(Date.now() + (tok.expires_in || 21600) * 1000).toISOString();
 
   // Guardar en Supabase (upsert)
-  await sb(env, '/ml_integracion?on_conflict=user_id', {
+  await sb(env, '/ml_integracion', {
     method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    headers: { Prefer: 'return=minimal' },
     body: JSON.stringify({
       user_id: userId,
       ml_user_id: String(tok.user_id),
