@@ -2,36 +2,38 @@ import { requireAuth } from '../core/auth.js';
 import { mountLayout } from '../core/layout.js';
 import { initTheme } from '../core/theme.js';
 import { fmtMoney, fmtDate, toast, today } from '../core/utils.js';
-import { listVentas, createVenta } from '../services/ventas.js';
+import { listVentas, createVenta, updateVenta, deleteVenta } from '../services/ventas.js';
 import { listProductos } from '../services/productos.js';
 import { getCotizacionHoy } from '../services/cotizacion.js';
 
-let _ventas = [], _productos = [], _cotizacion = null;
+let _ventas = [], _productos = [], _cotizacion = null, _editId = null;
 
 async function init() {
   initTheme();
   const session = await requireAuth();
   if (!session) return;
-
-  document.getElementById('app').innerHTML = `<div id="page-content" class="page-loading">Cargando...</div>`;
+  document.getElementById('app').innerHTML = '';
   mountLayout({ activeHref: '/app/ventas.html', title: 'Ventas', breadcrumb: 'Principal' });
+  await cargarDatos();
+  render();
+}
 
+async function cargarDatos() {
   [_ventas, _productos, _cotizacion] = await Promise.all([
     listVentas().catch(() => []),
     listProductos(true).catch(() => []),
     getCotizacionHoy().catch(() => null),
   ]);
-  render();
 }
 
 function render() {
   const main = document.querySelector('.main');
   if (!main) return;
   main.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
       <div>
         <h2 style="margin:0;">Ventas</h2>
-        <p style="margin:4px 0 0; color:var(--text-muted); font-size:.85rem;">${_ventas.length} registros totales</p>
+        <p style="margin:4px 0 0;color:var(--text-muted);font-size:.85rem;">${_ventas.length} registros totales</p>
       </div>
       <button class="btn btn--primary" id="btnNuevaVenta">+ Nueva venta</button>
     </div>
@@ -41,144 +43,193 @@ function render() {
         <thead>
           <tr>
             <th>Fecha</th><th>Producto</th><th>Cant.</th>
-            <th>Precio unit.</th><th>Total</th><th>Ganancia</th>
-            <th>Canal</th><th>Cliente</th><th></th>
+            <th>Precio unit.</th><th>Desc. ML</th><th>Desc. IIBB</th><th>Desc. Otros</th>
+            <th>Total</th><th>Ganancia</th><th>Canal</th><th>Cliente</th><th></th>
           </tr>
         </thead>
         <tbody>
           ${_ventas.length === 0
-            ? `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:32px;">Sin ventas registradas</td></tr>`
+            ? `<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:32px;">Sin ventas registradas</td></tr>`
             : _ventas.map(v => `
               <tr>
                 <td>${fmtDate(v.fecha)}</td>
-                <td>${_productos.find(p => p.id === v.producto_id)?.nombre ?? v.notas?.split('\n')[0] ?? '—'}</td>
+                <td>${_productos.find(p => p.id === v.producto_id)?.nombre ?? '—'}</td>
                 <td>${v.cantidad}</td>
                 <td>${fmtMoney(v.precio_unitario_ars)}</td>
+                <td style="color:var(--text-muted);">${v.descuento_ml_ars > 0 ? fmtMoney(v.descuento_ml_ars) : '—'}</td>
+                <td style="color:var(--text-muted);">${v.descuento_iibb_ars > 0 ? fmtMoney(v.descuento_iibb_ars) : '—'}</td>
+                <td style="color:var(--text-muted);">${v.descuento_otros_ars > 0 ? fmtMoney(v.descuento_otros_ars) : '—'}</td>
                 <td><strong>${fmtMoney(v.precio_total_ars)}</strong></td>
                 <td style="color:var(--success);">${fmtMoney(v.ganancia_neta ?? 0)}</td>
                 <td><span class="badge">${v.canal}</span></td>
                 <td>${v.cliente_nombre ?? '—'}</td>
-                <td><button class="btn btn--ghost btn--sm" data-del="${v.id}">✕</button></td>
+                <td style="display:flex;gap:4px;">
+                  <button class="btn btn--ghost btn--sm" data-edit="${v.id}" title="Editar">✏️</button>
+                  <button class="btn btn--ghost btn--sm" data-del="${v.id}" title="Eliminar">✕</button>
+                </td>
               </tr>`).join('')}
         </tbody>
       </table>
     </div>
-
-    <div id="modal-overlay" class="modal-overlay" style="display:none;">
-      <div class="modal">
-        <div class="modal__header">
-          <h3 class="modal__title">Nueva venta</h3>
-          <button class="modal__close" id="btnCerrarModal">✕</button>
-        </div>
-        <div class="modal__body">
-          <form id="formVenta">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-              <label class="form-group">
-                <span>Fecha *</span>
-                <input type="date" name="fecha" required value="${today()}">
-              </label>
-              <label class="form-group">
-                <span>Canal *</span>
-                <select name="canal" required>
-                  <option value="mercadolibre">Mercado Libre</option>
-                  <option value="mercadolibre_alt">ML cuenta alt</option>
-                  <option value="efectivo" selected>Efectivo</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="otro">Otro</option>
-                </select>
-              </label>
-            </div>
-            <label class="form-group">
-              <span>Producto</span>
-              <select name="producto_id">
-                <option value="">Sin producto asociado</option>
-                ${_productos.map(p => `<option value="${p.id}">${p.nombre} — ${fmtMoney(p.precio_venta_ars)}</option>`).join('')}
-              </select>
-            </label>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-              <label class="form-group">
-                <span>Cantidad *</span>
-                <input type="number" name="cantidad" min="1" value="1" required>
-              </label>
-              <label class="form-group">
-                <span>Precio unitario (ARS) *</span>
-                <input type="number" name="precio_unitario_ars" step="0.01" min="0" required placeholder="0.00">
-              </label>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-              <label class="form-group">
-                <span>Descuento (ARS)</span>
-                <input type="number" name="descuento_ars" step="0.01" min="0" value="0">
-              </label>
-              <label class="form-group">
-                <span>Cliente</span>
-                <input type="text" name="cliente_nombre" placeholder="Nombre del cliente">
-              </label>
-            </div>
-            <label class="form-group">
-              <span>Notas</span>
-              <textarea name="notas" rows="2" placeholder="Observaciones..."></textarea>
-            </label>
-          </form>
-        </div>
-        <div class="modal__footer">
-          <button class="btn btn--ghost" id="btnCancelar">Cancelar</button>
-          <button class="btn btn--primary" id="btnGuardar">Guardar venta</button>
-        </div>
-      </div>
-    </div>
+    <div id="modal-container"></div>
   `;
 
-  document.getElementById('btnNuevaVenta').addEventListener('click', () => {
-    document.getElementById('modal-overlay').style.display = 'flex';
-  });
-  document.getElementById('btnCerrarModal').addEventListener('click', cerrarModal);
-  document.getElementById('btnCancelar').addEventListener('click', cerrarModal);
-  document.getElementById('btnGuardar').addEventListener('click', guardar);
+  document.getElementById('btnNuevaVenta').addEventListener('click', () => abrirModal(null));
 
-  // Auto-fill precio from producto select
-  document.querySelector('[name=producto_id]')?.addEventListener('change', (e) => {
-    const p = _productos.find(p => p.id === e.target.value);
-    if (p) document.querySelector('[name=precio_unitario_ars]').value = p.precio_venta_ars;
+  main.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = _ventas.find(x => x.id === btn.dataset.edit);
+      if (v) abrirModal(v);
+    });
   });
 
   main.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('¿Eliminar esta venta?')) return;
-      const { deleteVenta } = await import('../services/ventas.js');
       await deleteVenta(btn.dataset.del).catch(e => toast(e.message, 'error'));
-      _ventas = await listVentas().catch(() => []);
+      await cargarDatos();
       render();
     });
   });
 }
 
+function abrirModal(v = null) {
+  _editId = v?.id ?? null;
+  const esEdicion = !!v;
+
+  document.getElementById('modal-container').innerHTML = `
+    <div id="modal-overlay" class="modal-overlay" style="display:flex;">
+      <div class="modal" style="max-width:560px;width:100%;">
+        <div class="modal__header">
+          <h3 class="modal__title">${esEdicion ? 'Editar venta' : 'Nueva venta'}</h3>
+          <button class="modal__close" id="btnCerrar">✕</button>
+        </div>
+        <div class="modal__body">
+          <form id="formVenta">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <label class="form-group"><span>Fecha *</span>
+                <input type="date" name="fecha" required value="${v?.fecha ?? today()}">
+              </label>
+              <label class="form-group"><span>Canal *</span>
+                <select name="canal" required>
+                  <option value="mercadolibre" ${v?.canal==='mercadolibre'?'selected':''}>Mercado Libre</option>
+                  <option value="mercadolibre_alt" ${v?.canal==='mercadolibre_alt'?'selected':''}>ML cuenta alt</option>
+                  <option value="efectivo" ${(!v||v?.canal==='efectivo')?'selected':''}>Efectivo</option>
+                  <option value="transferencia" ${v?.canal==='transferencia'?'selected':''}>Transferencia</option>
+                  <option value="otro" ${v?.canal==='otro'?'selected':''}>Otro</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="form-group"><span>Producto</span>
+              <select name="producto_id" id="selectProducto">
+                <option value="">Sin producto asociado</option>
+                ${_productos.map(p => `<option value="${p.id}" ${v?.producto_id===p.id?'selected':''}>${p.nombre} — ${fmtMoney(p.precio_venta_ars)}</option>`).join('')}
+              </select>
+            </label>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <label class="form-group"><span>Cantidad *</span>
+                <input type="number" name="cantidad" min="1" value="${v?.cantidad ?? 1}" required>
+              </label>
+              <label class="form-group"><span>Precio unitario (ARS) *</span>
+                <input type="number" name="precio_unitario_ars" id="inputPrecio" step="0.01" min="0" required value="${v?.precio_unitario_ars ?? ''}">
+              </label>
+            </div>
+
+            <p style="margin:16px 0 8px;font-weight:600;font-size:.9rem;">Descuentos</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+              <label class="form-group"><span>Comisión ML (ARS)</span>
+                <input type="number" name="descuento_ml_ars" step="0.01" min="0" value="${v?.descuento_ml_ars ?? 0}" placeholder="0.00">
+              </label>
+              <label class="form-group"><span>Ing. Brutos (ARS)</span>
+                <input type="number" name="descuento_iibb_ars" step="0.01" min="0" value="${v?.descuento_iibb_ars ?? 0}" placeholder="0.00">
+              </label>
+              <label class="form-group"><span>Otros (ARS)</span>
+                <input type="number" name="descuento_otros_ars" step="0.01" min="0" value="${v?.descuento_otros_ars ?? 0}" placeholder="0.00">
+              </label>
+            </div>
+            <p id="totalDescuento" style="font-size:.85rem;color:var(--text-muted);margin:4px 0 16px;">
+              Total descuentos: ${fmtMoney((v?.descuento_ml_ars??0)+(v?.descuento_iibb_ars??0)+(v?.descuento_otros_ars??0))}
+            </p>
+
+            <label class="form-group"><span>Cliente</span>
+              <input type="text" name="cliente_nombre" value="${v?.cliente_nombre ?? ''}" placeholder="Nombre del cliente">
+            </label>
+            <label class="form-group"><span>Notas</span>
+              <textarea name="notas" rows="2">${v?.notas ?? ''}</textarea>
+            </label>
+          </form>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--ghost" id="btnCancelar">Cancelar</button>
+          <button class="btn btn--primary" id="btnGuardar">${esEdicion ? 'Guardar cambios' : 'Guardar venta'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Auto-fill precio desde producto
+  document.getElementById('selectProducto')?.addEventListener('change', (e) => {
+    const p = _productos.find(p => p.id === e.target.value);
+    if (p) document.getElementById('inputPrecio').value = p.precio_venta_ars;
+  });
+
+  // Actualizar total descuentos en tiempo real
+  ['descuento_ml_ars','descuento_iibb_ars','descuento_otros_ars'].forEach(name => {
+    document.querySelector(`[name="${name}"]`)?.addEventListener('input', actualizarTotalDesc);
+  });
+
+  document.getElementById('btnCerrar').addEventListener('click', cerrarModal);
+  document.getElementById('btnCancelar').addEventListener('click', cerrarModal);
+  document.getElementById('btnGuardar').addEventListener('click', guardar);
+}
+
+function actualizarTotalDesc() {
+  const form = document.getElementById('formVenta');
+  const total = ['descuento_ml_ars','descuento_iibb_ars','descuento_otros_ars']
+    .reduce((s, n) => s + Number(form.querySelector(`[name="${n}"]`)?.value || 0), 0);
+  document.getElementById('totalDescuento').textContent = `Total descuentos: ${fmtMoney(total)}`;
+}
+
 function cerrarModal() {
-  document.getElementById('modal-overlay').style.display = 'none';
+  document.getElementById('modal-container').innerHTML = '';
+  _editId = null;
 }
 
 async function guardar() {
-  const form = document.getElementById('formVenta');
-  const fd = new FormData(form);
+  const fd = new FormData(document.getElementById('formVenta'));
+  const dML   = Number(fd.get('descuento_ml_ars')   || 0);
+  const dIIBB = Number(fd.get('descuento_iibb_ars') || 0);
+  const dOtros= Number(fd.get('descuento_otros_ars')|| 0);
   const payload = {
-    fecha: fd.get('fecha'),
-    canal: fd.get('canal'),
-    cantidad: Number(fd.get('cantidad')),
-    precio_unitario_ars: Number(fd.get('precio_unitario_ars')),
-    descuento_ars: Number(fd.get('descuento_ars') || 0),
-    cliente_nombre: fd.get('cliente_nombre') || null,
-    notas: fd.get('notas') || null,
-    producto_id: fd.get('producto_id') || null,
-    cotizacion_usd_id: _cotizacion?.id ?? null,
+    fecha:              fd.get('fecha'),
+    canal:              fd.get('canal'),
+    cantidad:           Number(fd.get('cantidad')),
+    precio_unitario_ars:Number(fd.get('precio_unitario_ars')),
+    descuento_ml_ars:   dML,
+    descuento_iibb_ars: dIIBB,
+    descuento_otros_ars:dOtros,
+    descuento_ars:      dML + dIIBB + dOtros,
+    cliente_nombre:     fd.get('cliente_nombre') || null,
+    notas:              fd.get('notas') || null,
+    producto_id:        fd.get('producto_id') || null,
+    cotizacion_usd_id:  _cotizacion?.id ?? null,
   };
-  if (!payload.fecha || !payload.precio_unitario_ars) {
+
+  if (!payload.fecha || !payload.precio_unitario_ars)
     return toast('Completá los campos obligatorios', 'error');
-  }
+
   try {
-    await createVenta(payload);
-    toast('Venta guardada');
+    if (_editId) {
+      await updateVenta(_editId, payload);
+      toast('Venta actualizada');
+    } else {
+      await createVenta(payload);
+      toast('Venta guardada');
+    }
     cerrarModal();
-    _ventas = await listVentas();
+    await cargarDatos();
     render();
   } catch (e) { toast(e.message, 'error'); }
 }
