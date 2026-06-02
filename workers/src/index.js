@@ -52,7 +52,9 @@ async function sb(env, path, opts = {}) {
     },
   });
   if (!res.ok) throw new Error(`Supabase error ${res.status}: ${await res.text()}`);
-  return res.status === 204 ? null : res.json();
+  const text = await res.text();
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return null; }
 }
 
 // ----------------------------------------------------------------------------
@@ -107,7 +109,7 @@ async function mlOAuthCallback(req, env) {
   const expiresAt = new Date(Date.now() + (tok.expires_in || 21600) * 1000).toISOString();
 
   // Guardar en Supabase (upsert)
-  await sb(env, '/ml_integracion', {
+  await sb(env, '/ml_integracion?on_conflict=user_id', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify({
