@@ -1,0 +1,152 @@
+/* ============================================================================
+   BASE — Reset, variables y tipografía
+   Fuentes: Manrope (display, headings) + IBM Plex Sans (UI/body)
+   ============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+
+/* ----------------------------- RESET ----------------------------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  transition: background-color .3s ease, color .3s ease;
+}
+img, svg { display: block; max-width: 100%; }
+button { font: inherit; cursor: pointer; border: 0; background: none; color: inherit; }
+input, select, textarea { font: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+table { border-collapse: collapse; width: 100%; }
+
+/* ----------------------------- TEMA CLARO (default) ----------------------------- */
+:root,
+:root[data-theme="light"] {
+  /* Superficies */
+  --bg:           #f7f5f0;       /* blanco hueso */
+  --surface:      #ffffff;
+  --surface-2:    #fbfaf7;
+  --surface-3:    #f1eee7;
+
+  /* Texto */
+  --text:         #1a1d24;
+  --text-muted:   #5c6470;
+  --text-dim:     #8a909b;
+
+  /* Bordes y divisores */
+  --border:       #e6e2d8;
+  --border-strong:#d2cdc0;
+
+  /* Marca - azul moderno */
+  --brand:        #2453ff;
+  --brand-2:      #4a72ff;
+  --brand-soft:   #e6ecff;
+  --brand-text:   #ffffff;
+
+  /* Estados */
+  --success:      #15a36e;
+  --success-soft: #d8f1e6;
+  --warning:      #d97706;
+  --warning-soft: #fdecd3;
+  --danger:       #d4364c;
+  --danger-soft:  #fadcdf;
+  --info:         #0c8ca0;
+
+  /* Acentos para gráficos */
+  --chart-1: #2453ff;
+  --chart-2: #15a36e;
+  --chart-3: #d97706;
+  --chart-4: #9333ea;
+  --chart-5: #d4364c;
+
+  /* Sombras */
+  --shadow-sm:    0 1px 2px rgba(20,25,40,0.04), 0 1px 1px rgba(20,25,40,0.03);
+  --shadow:       0 4px 12px rgba(20,25,40,0.06), 0 1px 3px rgba(20,25,40,0.04);
+  --shadow-lg:    0 18px 40px rgba(20,25,40,0.10), 0 6px 14px rgba(20,25,40,0.05);
+
+  /* Radios */
+  --radius-sm: 6px;
+  --radius:    10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+
+  color-scheme: light;
+}
+
+/* ----------------------------- TEMA OSCURO ----------------------------- */
+:root[data-theme="dark"] {
+  --bg:           #0e1014;
+  --surface:      #161a21;
+  --surface-2:    #1c2129;
+  --surface-3:    #232932;
+
+  --text:         #ececec;
+  --text-muted:   #a6abb5;
+  --text-dim:     #6f7682;
+
+  --border:       #2a3038;
+  --border-strong:#3a4250;
+
+  /* En oscuro la marca es naranja/amarillo */
+  --brand:        #ff8a1e;
+  --brand-2:      #ffb547;
+  --brand-soft:   #3a2614;
+  --brand-text:   #18120a;
+
+  --success:      #2dd28d;
+  --success-soft: #163026;
+  --warning:      #ffc23d;
+  --warning-soft: #3a2e10;
+  --danger:       #ff5e75;
+  --danger-soft:  #3a161d;
+  --info:         #4fc3d6;
+
+  --chart-1: #ff8a1e;
+  --chart-2: #ffc23d;
+  --chart-3: #2dd28d;
+  --chart-4: #4fc3d6;
+  --chart-5: #c084fc;
+
+  --shadow-sm:    0 1px 2px rgba(0,0,0,0.4);
+  --shadow:       0 6px 16px rgba(0,0,0,0.45), 0 2px 4px rgba(0,0,0,0.3);
+  --shadow-lg:    0 24px 48px rgba(0,0,0,0.5);
+
+  color-scheme: dark;
+}
+
+/* ----------------------------- TIPOGRAFÍA ----------------------------- */
+h1, h2, h3, h4, h5 {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  color: var(--text);
+}
+h1 { font-size: 1.75rem; letter-spacing: -0.025em; }
+h2 { font-size: 1.375rem; }
+h3 { font-size: 1.125rem; }
+h4 { font-size: 1rem; }
+
+.mono, code, kbd { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+.text-muted { color: var(--text-muted); }
+.text-dim   { color: var(--text-dim); }
+.text-success { color: var(--success); }
+.text-danger  { color: var(--danger); }
+.text-warning { color: var(--warning); }
+
+.numeric { font-variant-numeric: tabular-nums; }
+
+/* Selección */
+::selection { background: var(--brand); color: var(--brand-text); }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--surface-2); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }

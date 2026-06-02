@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2453ff">
+  <title>Deslizadores 3D · Acceso</title>
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+</head>
+<body>
+  <div class="login-shell">
+    <div class="login-card">
+      <div class="login-card__brand">
+        <span class="logo-mark" style="width:30px;height:30px;border-radius:8px;background:var(--brand);color:var(--brand-text);display:grid;place-items:center;font-weight:800;">D3</span>
+        Deslizadores 3D
+      </div>
+      <h2>Iniciar sesión</h2>
+      <p>Accedé al panel de gestión.</p>
+
+      <form id="loginForm">
+        <div class="field">
+          <label class="field__label">Email</label>
+          <input class="input" type="email" name="email" required autocomplete="email">
+        </div>
+        <div class="field">
+          <label class="field__label">Contraseña</label>
+          <input class="input" type="password" name="password" required autocomplete="current-password" minlength="6">
+        </div>
+        <button class="btn btn--primary" type="submit" id="submitBtn">
+          <span id="btnText">Ingresar</span>
+        </button>
+      </form>
+
+      <div style="margin-top: 16px; font-size: 0.85rem; color: var(--text-muted); text-align: center;">
+        ¿No tenés cuenta? <a href="#" id="toggleMode" style="color:var(--brand); font-weight:600;">Registrarse</a>
+      </div>
+
+      <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); text-align:center;">
+        <button class="theme-toggle" data-theme-toggle style="margin: 0 auto;"></button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { signIn, signUp, getSession } from '/js/core/auth.js';
+    import { initTheme } from '/js/core/theme.js';
+    import { toast } from '/js/core/utils.js';
+
+    initTheme();
+
+    // Si ya hay sesión, redirigir
+    getSession().then(s => { if (s) window.location.href = '/app/dashboard.html'; });
+
+    let mode = 'login';
+    const form = document.getElementById('loginForm');
+    const toggle = document.getElementById('toggleMode');
+    const btnText = document.getElementById('btnText');
+
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      mode = mode === 'login' ? 'signup' : 'login';
+      btnText.textContent = mode === 'login' ? 'Ingresar' : 'Crear cuenta';
+      toggle.textContent = mode === 'login' ? 'Registrarse' : 'Volver a login';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const email = fd.get('email');
+      const password = fd.get('password');
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      try {
+        if (mode === 'login') {
+          await signIn(email, password);
+          window.location.href = '/app/dashboard.html';
+        } else {
+          await signUp(email, password, email.split('@')[0]);
+          toast('Cuenta creada. Revisá tu email para confirmar.', 'success');
+        }
+      } catch (err) {
+        toast(err.message || 'Error al autenticar', 'danger');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

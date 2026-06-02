@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2453ff">
+  <title>Dashboard · Deslizadores 3D</title>
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/layout.css">
+  <link rel="stylesheet" href="/css/components.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Contenido del main; mountLayout envuelve con sidebar+topbar -->
+
+    <!-- KPIs -->
+    <section class="kpi-grid" id="kpiGrid">
+      <div class="kpi"><div class="kpi__label">Cargando…</div></div>
+    </section>
+
+    <!-- Gráfico + Ranking -->
+    <section class="split-grid" style="margin-bottom: 16px;">
+      <div class="card">
+        <div class="card__header">
+          <h3 class="card__title">Evolución últimos 30 días</h3>
+          <select class="select" style="width: auto; padding: 5px 10px; font-size: 0.8rem;" id="chartMetric">
+            <option value="ingreso">Ingresos</option>
+            <option value="ganancia">Ganancia</option>
+          </select>
+        </div>
+        <div id="lineChart" style="height: 240px;"></div>
+      </div>
+
+      <div class="card">
+        <div class="card__header">
+          <h3 class="card__title">Top productos</h3>
+        </div>
+        <div id="topProductos"><div class="empty">Cargando…</div></div>
+      </div>
+    </section>
+
+    <!-- Objetivos + Últimas ventas -->
+    <section class="split-grid">
+      <div class="card">
+        <div class="card__header">
+          <h3 class="card__title">Últimas ventas</h3>
+          <a class="card__action" href="/app/ventas.html">Ver todas →</a>
+        </div>
+        <div id="ultimasVentas"><div class="empty">Cargando…</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card__header">
+          <h3 class="card__title">Objetivos de ahorro</h3>
+          <a class="card__action" href="/app/objetivos.html">Gestionar →</a>
+        </div>
+        <div id="objetivosList"><div class="empty">Cargando…</div></div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="/js/pages/dashboard.js"></script>
+</body>
+</html>
