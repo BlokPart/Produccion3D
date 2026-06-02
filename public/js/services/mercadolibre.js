@@ -20,9 +20,12 @@ export async function iniciarOAuth() {
 }
 
 export async function syncManual() {
-  const headers = await authHeader();
-  const resp = await fetch(`${WORKER_URL}/api/ml/sync`, {
-    method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error('No autenticado');
+  const resp = await fetch(`${WORKER_URL}/api/ml/sync?user_id=${userId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
   });
   if (!resp.ok) throw new Error(await resp.text());
   return resp.json();
