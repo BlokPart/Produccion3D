@@ -92,9 +92,10 @@ async function mlOAuthCallback(req, env) {
     }),
   });
 
-  if (!tokenRes.ok) {
-    return new Response('Error obteniendo token: ' + await tokenRes.text(), { status: 500 });
-  }
+ if (!tokenRes.ok) {
+  const errText = await tokenRes.text();
+  return new Response(`Error obteniendo token [client_id usado: ${env.ML_CLIENT_ID}]: ${errText}`, { status: 500 });
+}
   const tok = await tokenRes.json();
   const expiresAt = new Date(Date.now() + tok.expires_in * 1000).toISOString();
 
