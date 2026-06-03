@@ -150,3 +150,27 @@ h4 { font-size: 1rem; }
 ::-webkit-scrollbar-track { background: var(--surface-2); }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* ── Select dropdown fix ──────────────────────────────────────────── */
+select {
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+/* Forzar colores en options para ambos temas */
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] select option {
+  background-color: #1c2129;
+  color: #ececec;
+}
+:root[data-theme="light"] select,
+:root[data-theme="light"] select option {
+  background-color: #ffffff;
+  color: #1a1d24;
+}
+/* Para el tema por defecto (light) */
+select option {
+  background-color: #ffffff;
+  color: #1a1d24;
+}
