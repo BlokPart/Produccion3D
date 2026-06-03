@@ -86,12 +86,33 @@ export function renderTopbar({ title, breadcrumb = '', actions = '' }) {
           <h1>${title}</h1>
         </div>
       </div>
-      <div class="topbar__actions">
+      <div class="topbar__actions" style="display:flex;align-items:center;gap:16px;">
         ${actions}
+        <div id="topbar-clock" style="text-align:right;line-height:1.25;">
+          <div id="clock-date" style="font-size:.7rem;color:var(--text-muted);text-transform:capitalize;"></div>
+          <div id="clock-time" style="font-size:.95rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.04em;"></div>
+        </div>
         <button class="theme-toggle" data-theme-toggle aria-label="Cambiar tema"></button>
       </div>
     </header>
   `;
+}
+
+const DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function startClock() {
+  function tick() {
+    const now = new Date();
+    const dateEl = document.getElementById('clock-date');
+    const timeEl = document.getElementById('clock-time');
+    if (!dateEl || !timeEl) return;
+    dateEl.textContent = DIAS_SEMANA[now.getDay()] + ' ' + now.getDate() + ' ' + MESES_CORTO[now.getMonth()] + '. ' + now.getFullYear();
+    timeEl.textContent = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  }
+  tick();
+  clearInterval(window._clockInterval);
+  window._clockInterval = setInterval(tick, 1000);
 }
 
 /** Monta el layout completo (sidebar + topbar) en un contenedor con id="app". */
@@ -106,6 +127,7 @@ export function mountLayout({ activeHref, title, breadcrumb, actions = '' } = {}
   `;
   // Wire events
   document.getElementById('logoutBtn')?.addEventListener('click', signOut);
+  startClock();
   const menuToggle = document.getElementById('menuToggle');
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
