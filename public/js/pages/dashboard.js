@@ -136,7 +136,10 @@ function render() {
 
     <!-- Widget inversión/recupero -->
     <div class="card" style="margin-bottom:16px;">
-      <h3 style="margin:0 0 16px;">Caja — Inversión en materiales</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="margin:0;">Caja — Inversión en materiales</h3>
+        <button class="btn btn--ghost btn--sm" id="btnRefreshCaja" title="Actualizar datos">↻ Actualizar</button>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:16px;">
         <div style="padding:12px;background:var(--bg-subtle,var(--surface-2));border-radius:8px;">
           <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Total invertido</div>
@@ -196,6 +199,13 @@ function render() {
   `;
 
   // Eventos
+  document.getElementById('btnRefreshCaja')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btnRefreshCaja');
+    if (btn) { btn.textContent = '↻ Actualizando...'; btn.disabled = true; }
+    await cargarDatos();
+    render();
+  });
+
   document.getElementById('selectPeriodo').addEventListener('change', async (e) => {
     setPeriodoActual(e.target.value);
     await cargarDatos();
