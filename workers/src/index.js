@@ -1,29 +1,14 @@
 // ============================================================================
 // CLOUDFLARE WORKER — Deslizadores 3D API
-// ----------------------------------------------------------------------------
-// Responsabilidades:
-//   1. OAuth de Mercado Libre (intercambio de código, refresh de tokens)
-//   2. Sincronización de órdenes desde ML hacia Supabase
-//   3. Actualización diaria de cotización USD (cron)
-//
-// Variables de entorno requeridas (wrangler secret put):
-//   - ML_CLIENT_ID
-//   - ML_CLIENT_SECRET
-//   - ML_REDIRECT_URI  (ej: https://deslizadores-api.tu.workers.dev/api/ml/oauth/callback)
-//   - SUPABASE_URL
-//   - SUPABASE_SERVICE_ROLE_KEY  (CUIDADO: clave con permisos completos, solo en Worker)
-//   - APP_FRONTEND_URL  (ej: https://deslizadores3d.pages.dev)
 // ============================================================================
 
 const ML_AUTH_URL  = 'https://auth.mercadolibre.com.ar/authorization';
 const ML_TOKEN_URL = 'https://api.mercadolibre.com/oauth/token';
 const ML_API       = 'https://api.mercadolibre.com';
 
-// CORS helper
-function cors(env, origin) {
-  const allowed = env.APP_FRONTEND_URL || '*';
+function cors(env) {
   return {
-    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Origin': env.APP_FRONTEND_URL || '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
@@ -36,9 +21,7 @@ function json(data, init = {}, env) {
   });
 }
 
-// ----------------------------------------------------------------------------
-// Helper: petición a Supabase (vía REST con service_role)
-// ----------------------------------------------------------------------------
+// Helper Supabase — robusto ante body vacío
 async function sb(env, path, opts = {}) {
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1${path}`, {
     ...opts,
@@ -60,7 +43,6 @@ async function sb(env, path, opts = {}) {
 // OAUTH FLOW
 // ----------------------------------------------------------------------------
 
-/** GET /api/ml/oauth/start?user_id=... → redirige a ML */
 function mlOAuthStart(req, env) {
   const url = new URL(req.url);
   const userId = url.searchParams.get('user_id');
@@ -70,18 +52,16 @@ function mlOAuthStart(req, env) {
   auth.searchParams.set('response_type', 'code');
   auth.searchParams.set('client_id', env.ML_CLIENT_ID);
   auth.searchParams.set('redirect_uri', env.ML_REDIRECT_URI);
-  auth.searchParams.set('state', userId); // pasamos user_id como state
+  auth.searchParams.set('state', userId);
   return Response.redirect(auth.toString(), 302);
 }
 
-/** GET /api/ml/oauth/callback?code=...&state=... */
 async function mlOAuthCallback(req, env) {
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
   const userId = url.searchParams.get('state');
   if (!code || !userId) return new Response('Parámetros faltantes', { status: 400 });
 
-  // Intercambiar código por tokens
   const params = new URLSearchParams();
   params.append('grant_type', 'authorization_code');
   params.append('client_id', env.ML_CLIENT_ID);
@@ -91,7 +71,7 @@ async function mlOAuthCallback(req, env) {
 
   const tokenRes = await fetch(ML_TOKEN_URL, {
     method: 'POST',
-    headers: { 
+    headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
     },
@@ -105,28 +85,27 @@ async function mlOAuthCallback(req, env) {
   let tok;
   try { tok = JSON.parse(tokenText); }
   catch(e) { return new Response(`Respuesta inválida de ML: ${tokenText}`, { status: 500 }); }
+
   const expiresAt = new Date(Date.now() + (tok.expires_in || 21600) * 1000).toISOString();
 
-  // Guardar en Supabase (upsert)
   await sb(env, '/ml_integracion', {
     method: 'POST',
-    headers: { Prefer: 'return=minimal' },
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify({
       user_id: userId,
       ml_user_id: String(tok.user_id),
+      ml_nickname: tok.nickname || null,
       access_token: tok.access_token,
       refresh_token: tok.refresh_token,
       expires_at: expiresAt,
-      scope: tok.scope,
+      scope: tok.scope || null,
       updated_at: new Date().toISOString(),
     }),
   });
 
-  // Redirigir al frontend con éxito
   return Response.redirect(`${env.APP_FRONTEND_URL}/app/configuracion.html?ml=connected`, 302);
 }
 
-/** Renueva el access_token usando refresh_token. */
 async function refreshMlToken(env, integ) {
   const res = await fetch(ML_TOKEN_URL, {
     method: 'POST',
@@ -154,7 +133,8 @@ async function refreshMlToken(env, integ) {
 }
 
 async function getValidIntegration(env, userId) {
-  const [integ] = await sb(env, `/ml_integracion?user_id=eq.${userId}`);
+  const data = await sb(env, `/ml_integracion?user_id=eq.${userId}`);
+  const integ = Array.isArray(data) ? data[0] : data;
   if (!integ) throw new Error('Sin integración ML para este usuario');
   if (new Date(integ.expires_at) <= new Date(Date.now() + 60000)) {
     return await refreshMlToken(env, integ);
@@ -166,7 +146,6 @@ async function getValidIntegration(env, userId) {
 // SYNC DE ÓRDENES
 // ----------------------------------------------------------------------------
 
-/** POST /api/ml/sync?user_id=... */
 async function mlSync(req, env) {
   const url = new URL(req.url);
   const userId = url.searchParams.get('user_id');
@@ -176,7 +155,6 @@ async function mlSync(req, env) {
     const integ = await getValidIntegration(env, userId);
     const sellerId = integ.ml_user_id;
 
-    // Traer órdenes recientes (últimos 30 días)
     const desde = new Date();
     desde.setDate(desde.getDate() - 30);
     const dFrom = desde.toISOString();
@@ -195,26 +173,30 @@ async function mlSync(req, env) {
       const results = payload.results || [];
       if (!results.length) break;
 
-      // Insertar/upsert en Supabase. RLS no aplica con service_role.
-      const rows = results.map(o => ({
-  user_id: userId,
-  canal: 'mercadolibre',
-  ml_order_id: String(o.id),
-  ml_pack_id: o.pack_id ? String(o.pack_id) : null,
-  fecha: (o.date_closed || o.date_created || '').slice(0, 10),
-  cantidad: (o.order_items?.[0]?.quantity) || 1,
-  precio_unitario_ars: o.order_items?.[0]?.unit_price || 0,
-  descuento_ars: 0,
-  descuento_ml_ars: o.order_items?.[0]?.sale_fee || 0,
-  descuento_iibb_ars: 0,
-  descuento_otros_ars: 0,
-  moneda: o.currency_id || 'ARS',
-  comision_ml: o.order_items?.[0]?.sale_fee || 0,
-  costo_envio: o.shipping?.cost || 0,
-  comprador: o.buyer?.nickname || null,
-  cliente_nombre: o.buyer?.nickname || null,
-  costo_total_snapshot: 0,
-}));
+      const rows = results.map(o => {
+        const item = o.order_items?.[0];
+        const saleFee = item?.sale_fee || 0;
+        return {
+          user_id: userId,
+          canal: 'mercadolibre',
+          ml_order_id: String(o.id),
+          ml_pack_id: o.pack_id ? String(o.pack_id) : null,
+          fecha: (o.date_closed || o.date_created || '').slice(0, 10),
+          cantidad: item?.quantity || 1,
+          precio_unitario_ars: item?.unit_price || 0,
+          descuento_ars: saleFee,
+          descuento_ml_ars: saleFee,
+          descuento_iibb_ars: 0,
+          descuento_otros_ars: 0,
+          moneda: o.currency_id || 'ARS',
+          comision_ml: saleFee,
+          costo_envio: o.shipping?.cost || 0,
+          comprador: o.buyer?.nickname || null,
+          cliente_nombre: o.buyer?.nickname || null,
+          costo_total_snapshot: 0,
+          notas: item?.item?.title || null,
+        };
+      });
 
       await sb(env, '/ventas', {
         method: 'POST',
@@ -225,16 +207,10 @@ async function mlSync(req, env) {
       totalProcesados += rows.length;
       if (results.length < limit) break;
       offset += limit;
-      if (offset > 1000) break; // safety
+      if (offset > 1000) break;
     }
 
-    // Log de sincronización
-    await sb(env, '/ml_sync_log', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: userId, tipo: 'ordenes', ok: true, procesados: totalProcesados,
-      }),
-    });
+    // Actualizar estado de integración
     await sb(env, `/ml_integracion?user_id=eq.${userId}`, {
       method: 'PATCH',
       body: JSON.stringify({
@@ -246,20 +222,19 @@ async function mlSync(req, env) {
 
     return json({ ok: true, procesados: totalProcesados }, {}, env);
   } catch (err) {
-    await sb(env, '/ml_sync_log', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: userId, tipo: 'ordenes', ok: false, error: err.message }),
+    await sb(env, `/ml_integracion?user_id=eq.${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ ultimo_sync_ok: false, ultimo_error: err.message }),
     }).catch(() => {});
     return json({ ok: false, error: err.message }, { status: 500 }, env);
   }
 }
 
 // ----------------------------------------------------------------------------
-// COTIZACIÓN USD (cron + endpoint)
+// COTIZACIÓN USD
 // ----------------------------------------------------------------------------
 
 async function refreshCotizacion(env) {
-  // dolarapi.com — endpoint público y estable
   const r = await fetch('https://dolarapi.com/v1/dolares');
   const arr = await r.json();
   const find = (casa) => arr.find(x => x.casa === casa);
@@ -271,14 +246,9 @@ async function refreshCotizacion(env) {
   const today = new Date().toISOString().slice(0, 10);
   const row = {
     fecha: today,
-    oficial_compra: oficial?.compra,
-    oficial_venta: oficial?.venta,
-    blue_compra: blue?.compra,
-    blue_venta: blue?.venta,
-    mep_venta: mep?.venta,
-    cripto_venta: cripto?.venta,
+    tipo: 'blue',
+    valor_ars: blue?.venta || oficial?.venta || 0,
     fuente: 'dolarapi.com',
-    fetched_at: new Date().toISOString(),
   };
 
   await sb(env, '/cotizaciones_usd', {
@@ -286,7 +256,7 @@ async function refreshCotizacion(env) {
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify(row),
   });
-  return row;
+  return { oficial, blue, mep, cripto };
 }
 
 // ----------------------------------------------------------------------------
@@ -298,29 +268,20 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors(env) });
 
     try {
-      // ML OAuth
       if (url.pathname === '/api/ml/oauth/start')    return mlOAuthStart(req, env);
       if (url.pathname === '/api/ml/oauth/callback') return mlOAuthCallback(req, env);
-
-      // ML Sync
       if (url.pathname === '/api/ml/sync')           return mlSync(req, env);
-
-      // Cotización
       if (url.pathname === '/api/exchange-rate') {
         const row = await refreshCotizacion(env);
         return json(row, {}, env);
       }
-
-      // Healthcheck
       if (url.pathname === '/api/health') return json({ ok: true, ts: Date.now() }, {}, env);
-
       return new Response('Not found', { status: 404 });
     } catch (err) {
       return json({ error: err.message }, { status: 500 }, env);
     }
   },
 
-  // Cron trigger (configurado en wrangler.toml): actualiza cotización
   async scheduled(event, env, ctx) {
     ctx.waitUntil(refreshCotizacion(env).catch(err => console.error('cron cotización', err)));
   },
