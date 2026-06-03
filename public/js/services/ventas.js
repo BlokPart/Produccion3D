@@ -1,27 +1,75 @@
 import { supabase } from '../config/supabase.js';
-import { today, firstOfMonth } from '../core/utils.js';
 
-export async function listVentas({ desde, hasta, canal, limit = 100 } = {}) {
-  let q = supabase
-    .from('ventas')
-    .select('*, productos(nombre)')
+// ── Períodos ──────────────────────────────────────────────────────────────────
+export const PERIODOS = {
+  hoy:          { label: 'Hoy' },
+  semana:       { label: 'Última semana' },
+  mes:          { label: 'Este mes' },
+  mes_anterior: { label: 'Mes anterior' },
+  dias30:       { label: 'Últimos 30 días' },
+  dias90:       { label: 'Últimos 90 días' },
+  todo:         { label: 'Todo' },
+};
+const STORAGE_KEY = 'd3_periodo';
+
+export function getPeriodoActual() {
+  return localStorage.getItem(STORAGE_KEY) || 'mes';
+}
+export function setPeriodoActual(key) {
+  localStorage.setItem(STORAGE_KEY, key);
+}
+
+export function calcularRango(key) {
+  const hoy = new Date();
+  const fmt = d => d.toISOString().slice(0, 10);
+  switch (key) {
+    case 'hoy':
+      return { desde: fmt(hoy), hasta: fmt(hoy) };
+    case 'semana': {
+      const d = new Date(hoy); d.setDate(d.getDate() - 6);
+      return { desde: fmt(d), hasta: fmt(hoy) };
+    }
+    case 'mes': {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+      return { desde: fmt(d), hasta: fmt(hoy) };
+    }
+    case 'mes_anterior': {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+      const h = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+      return { desde: fmt(d), hasta: fmt(h) };
+    }
+    case 'dias90': {
+      const d = new Date(hoy); d.setDate(d.getDate() - 89);
+      return { desde: fmt(d), hasta: fmt(hoy) };
+    }
+    case 'todo':
+      return { desde: null, hasta: null };
+    default: { // dias30
+      const d = new Date(hoy); d.setDate(d.getDate() - 29);
+      return { desde: fmt(d), hasta: fmt(hoy) };
+    }
+  }
+}
+
+// ── Queries ───────────────────────────────────────────────────────────────────
+const CAMPOS = 'id,fecha,canal,cantidad,precio_unitario_ars,descuento_ml_ars,descuento_iibb_ars,descuento_otros_ars,costo_total_snapshot,cliente_nombre,notas,ml_order_id,producto_id,productos(nombre)';
+
+export async function listVentas({ desde, hasta, limit = 500 } = {}) {
+  let q = supabase.from('ventas').select(CAMPOS)
     .order('fecha', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit);
   if (desde) q = q.gte('fecha', desde);
   if (hasta) q = q.lte('fecha', hasta);
-  if (canal) q = q.eq('canal', canal);
   const { data, error } = await q;
   if (error) throw error;
   return data ?? [];
 }
 
-export async function createVenta(venta) {
-  const session = (await supabase.auth.getSession()).data.session;
-  if (!session) throw new Error('No autenticado');
-  const payload = { ...venta, user_id: session.user.id };
+export async function createVenta(payload) {
+  const { data: { session } } = await supabase.auth.getSession();
   const { data, error } = await supabase
-    .from('ventas').insert(payload).select().single();
+    .from('ventas').insert({ ...payload, user_id: session.user.id }).select().single();
   if (error) throw error;
   return data;
 }
@@ -38,58 +86,39 @@ export async function deleteVenta(id) {
   if (error) throw error;
 }
 
-export async function kpiVentasHoy() {
-  const { data } = await supabase
-    .from('ventas')
-    .select('precio_total_ars, ganancia_neta')
-    .eq('fecha', today());
-  return aggregate(data ?? []);
+// ── Agregados ─────────────────────────────────────────────────────────────────
+export function calcKpis(ventas) {
+  return (ventas ?? []).reduce((acc, v) => {
+    const bruto  = (v.precio_unitario_ars || 0) * (v.cantidad || 1);
+    const descs  = (v.descuento_ml_ars || 0) + (v.descuento_iibb_ars || 0) + (v.descuento_otros_ars || 0);
+    const neto   = bruto - descs;
+    const ganancia = neto - (v.costo_total_snapshot || 0);
+    return {
+      cantidad:  acc.cantidad  + 1,
+      bruto:     acc.bruto     + bruto,
+      neto:      acc.neto      + neto,
+      ganancia:  acc.ganancia  + ganancia,
+    };
+  }, { cantidad: 0, bruto: 0, neto: 0, ganancia: 0 });
 }
 
-export async function kpiVentasMes() {
-  const { data } = await supabase
-    .from('ventas')
-    .select('precio_total_ars, ganancia_neta')
-    .gte('fecha', firstOfMonth());
-  return aggregate(data ?? []);
-}
-
-function aggregate(rows) {
-  return (rows ?? []).reduce((acc, r) => ({
-    cantidad: acc.cantidad + 1,
-    ingreso:  acc.ingreso  + Number(r.precio_total_ars || 0),
-    ganancia: acc.ganancia + Number(r.ganancia_neta    || 0),
-  }), { cantidad: 0, ingreso: 0, ganancia: 0 });
-}
-
-export async function ventasSerie(diasAtras = 30) {
-  const desde = new Date();
-  desde.setDate(desde.getDate() - diasAtras);
-  const desdeStr = desde.toISOString().slice(0, 10);
-  const { data, error } = await supabase
-    .from('ventas')
-    .select('fecha, precio_total_ars, ganancia_neta')
-    .gte('fecha', desdeStr)
-    .order('fecha', { ascending: true });
-  if (error) throw error;
-
+export function calcSerie(ventas) {
   const map = new Map();
-  (data ?? []).forEach(v => {
+  (ventas ?? []).forEach(v => {
     const k = v.fecha;
-    if (!map.has(k)) map.set(k, { fecha: k, ingreso: 0, ganancia: 0 });
-    const row = map.get(k);
-    row.ingreso  += Number(v.precio_total_ars || 0);
-    row.ganancia += Number(v.ganancia_neta    || 0);
+    if (!map.has(k)) map.set(k, { fecha: k, bruto: 0, neto: 0, ganancia: 0 });
+    const r = map.get(k);
+    const bruto = (v.precio_unitario_ars || 0) * (v.cantidad || 1);
+    const descs = (v.descuento_ml_ars || 0) + (v.descuento_iibb_ars || 0) + (v.descuento_otros_ars || 0);
+    r.bruto    += bruto;
+    r.neto     += bruto - descs;
+    r.ganancia += bruto - descs - (v.costo_total_snapshot || 0);
   });
-  return Array.from(map.values());
+  return Array.from(map.values()).sort((a, b) => a.fecha.localeCompare(b.fecha));
 }
 
-export async function topProductos(limit = 5) {
-  const { data, error } = await supabase
-    .from('v_ranking_productos')
-    .select('*')
-    .order('ganancia_total', { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data ?? [];
-}
+// Mantener compatibilidad con dashboard legacy
+export async function kpiVentasHoy() { return { cantidad: 0, bruto: 0, neto: 0, ganancia: 0 }; }
+export async function kpiVentasMes() { return { cantidad: 0, bruto: 0, neto: 0, ganancia: 0 }; }
+export async function ventasSerie()  { return []; }
+export async function topProductos() { return []; }
