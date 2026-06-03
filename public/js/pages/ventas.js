@@ -43,31 +43,43 @@ function render() {
         <thead>
           <tr>
             <th>Fecha</th><th>Producto</th><th>Cant.</th>
-            <th>Precio unit.</th><th>Desc. ML</th><th>Desc. IIBB</th><th>Desc. Otros</th>
-            <th>Total</th><th>Ganancia</th><th>Canal</th><th>Cliente</th><th></th>
+            <th>Precio unit.</th><th>Bruto</th>
+            <th>Desc. ML</th><th>Desc. IIBB</th><th>Desc. Otros</th>
+            <th>Neto recibido</th><th>Ganancia</th>
+            <th>Canal</th><th>Cliente</th><th></th>
           </tr>
         </thead>
         <tbody>
           ${_ventas.length === 0
-            ? `<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:32px;">Sin ventas registradas</td></tr>`
-            : _ventas.map(v => `
-              <tr>
-                <td>${fmtDate(v.fecha)}</td>
-                <td>${_productos.find(p => p.id === v.producto_id)?.nombre ?? '—'}</td>
-                <td>${v.cantidad}</td>
-                <td>${fmtMoney(v.precio_unitario_ars)}</td>
-                <td style="color:var(--text-muted);">${v.descuento_ml_ars > 0 ? fmtMoney(v.descuento_ml_ars) : '—'}</td>
-                <td style="color:var(--text-muted);">${v.descuento_iibb_ars > 0 ? fmtMoney(v.descuento_iibb_ars) : '—'}</td>
-                <td style="color:var(--text-muted);">${v.descuento_otros_ars > 0 ? fmtMoney(v.descuento_otros_ars) : '—'}</td>
-                <td><strong>${fmtMoney(v.precio_total_ars)}</strong></td>
-                <td style="color:var(--success);">${fmtMoney(v.ganancia_neta ?? 0)}</td>
-                <td><span class="badge">${v.canal}</span></td>
-                <td>${v.cliente_nombre ?? '—'}</td>
-                <td style="display:flex;gap:4px;">
-                  <button class="btn btn--ghost btn--sm" data-edit="${v.id}" title="Editar">✏️</button>
-                  <button class="btn btn--ghost btn--sm" data-del="${v.id}" title="Eliminar">✕</button>
-                </td>
-              </tr>`).join('')}
+            ? `<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:32px;">Sin ventas registradas</td></tr>`
+            : _ventas.map(v => {
+                const bruto  = (v.precio_unitario_ars || 0) * (v.cantidad || 1);
+                const dML    = Number(v.descuento_ml_ars    || 0);
+                const dIIBB  = Number(v.descuento_iibb_ars  || 0);
+                const dOtros = Number(v.descuento_otros_ars || 0);
+                const neto   = bruto - dML - dIIBB - dOtros;
+                const costo  = Number(v.costo_total_snapshot || 0);
+                const ganancia = neto - costo;
+                const prod   = _productos.find(p => p.id === v.producto_id)?.nombre ?? v.notas ?? '—';
+                return `<tr>
+                  <td>${fmtDate(v.fecha)}</td>
+                  <td>${prod}</td>
+                  <td>${v.cantidad}</td>
+                  <td>${fmtMoney(v.precio_unitario_ars)}</td>
+                  <td style="color:var(--text-muted);">${fmtMoney(bruto)}</td>
+                  <td style="color:var(--danger,#e53935);">${dML > 0 ? '-'+fmtMoney(dML) : '—'}</td>
+                  <td style="color:var(--danger,#e53935);">${dIIBB > 0 ? '-'+fmtMoney(dIIBB) : '—'}</td>
+                  <td style="color:var(--danger,#e53935);">${dOtros > 0 ? '-'+fmtMoney(dOtros) : '—'}</td>
+                  <td><strong>${fmtMoney(neto)}</strong></td>
+                  <td style="color:${ganancia>=0?'var(--success)':'var(--danger,#e53935)'};font-weight:600;">${fmtMoney(ganancia)}</td>
+                  <td><span class="badge">${v.canal}</span></td>
+                  <td>${v.cliente_nombre ?? '—'}</td>
+                  <td style="display:flex;gap:4px;">
+                    <button class="btn btn--ghost btn--sm" data-edit="${v.id}" title="Editar">✏️</button>
+                    <button class="btn btn--ghost btn--sm" data-del="${v.id}" title="Eliminar">✕</button>
+                  </td>
+                </tr>`;
+              }).join('')}
         </tbody>
       </table>
     </div>
