@@ -8,8 +8,9 @@ import {
 } from '../services/ventas.js';
 import { listObjetivos, calcularProgreso } from '../services/objetivos.js';
 import { getCotizacionHoy } from '../services/cotizacion.js';
+import { supabase } from '../config/supabase.js';
 
-let _ventas = [], _objetivos = [], _cotizacion = null;
+let _ventas = [], _objetivos = [], _cotizacion = null, _totalCompras = 0, _totalNetoVentas = 0;
 
 async function init() {
   initTheme();
@@ -28,6 +29,19 @@ async function cargarDatos() {
     listObjetivos().catch(() => []),
     getCotizacionHoy().catch(() => null),
   ]);
+
+  // Totales globales (todo el tiempo, no filtrado por período)
+  const { data: compras } = await supabase
+    .from('compras_filamento').select('precio_total_ars');
+  _totalCompras = (compras ?? []).reduce((s, c) => s + Number(c.precio_total_ars || 0), 0);
+
+  const { data: todasVentas } = await supabase
+    .from('ventas').select('precio_unitario_ars,cantidad,descuento_ml_ars,descuento_iibb_ars,descuento_otros_ars');
+  _totalNetoVentas = (todasVentas ?? []).reduce((s, v) => {
+    const bruto = (v.precio_unitario_ars||0)*(v.cantidad||1);
+    const descs = (v.descuento_ml_ars||0)+(v.descuento_iibb_ars||0)+(v.descuento_otros_ars||0);
+    return s + bruto - descs;
+  }, 0);
 }
 
 function render() {
@@ -118,6 +132,41 @@ function render() {
               </div>`;
             }).join('')}
       </div>
+    </div>
+
+    <!-- Widget inversión/recupero -->
+    <div class="card" style="margin-bottom:16px;">
+      <h3 style="margin:0 0 16px;">Caja — Inversión en materiales</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:16px;">
+        <div style="padding:12px;background:var(--bg-subtle,var(--surface-2));border-radius:8px;">
+          <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Total invertido</div>
+          <div style="font-size:1.3rem;font-weight:700;color:var(--danger);">${fmtMoney(_totalCompras)}</div>
+          <div style="font-size:.75rem;color:var(--text-muted);">en compras de filamento</div>
+        </div>
+        <div style="padding:12px;background:var(--bg-subtle,var(--surface-2));border-radius:8px;">
+          <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Total recuperado</div>
+          <div style="font-size:1.3rem;font-weight:700;color:var(--success);">${fmtMoney(_totalNetoVentas)}</div>
+          <div style="font-size:.75rem;color:var(--text-muted);">neto cobrado (sin comisiones)</div>
+        </div>
+        <div style="padding:12px;background:var(--bg-subtle,var(--surface-2));border-radius:8px;${_totalNetoVentas>=_totalCompras?'border:1px solid var(--success);':''}">
+          <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">${_totalNetoVentas>=_totalCompras?'Ganancia total':'Por recuperar'}</div>
+          <div style="font-size:1.3rem;font-weight:700;color:${_totalNetoVentas>=_totalCompras?'var(--success)':'var(--warning)'};">${fmtMoney(Math.abs(_totalNetoVentas-_totalCompras))}</div>
+          <div style="font-size:.75rem;color:var(--text-muted);">${_totalNetoVentas>=_totalCompras?'✅ inversión recuperada':'falta recuperar'}</div>
+        </div>
+      </div>
+      ${(() => {
+        const pct = _totalCompras > 0 ? Math.min(100, (_totalNetoVentas/_totalCompras)*100) : 0;
+        const color = pct >= 100 ? 'var(--success)' : pct >= 60 ? 'var(--warning)' : 'var(--danger)';
+        return `<div>
+          <div style="display:flex;justify-content:space-between;font-size:.8rem;color:var(--text-muted);margin-bottom:6px;">
+            <span>Recupero de inversión</span>
+            <span>${pct.toFixed(1)}%</span>
+          </div>
+          <div style="background:var(--border);border-radius:6px;height:10px;overflow:hidden;">
+            <div style="background:${color};height:100%;width:${pct}%;border-radius:6px;transition:width .5s;"></div>
+          </div>
+        </div>`;
+      })()}
     </div>
 
     <!-- Objetivos -->
