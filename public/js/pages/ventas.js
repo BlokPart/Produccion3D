@@ -2,7 +2,7 @@ import { requireAuth } from '../core/auth.js';
 import { mountLayout } from '../core/layout.js';
 import { initTheme } from '../core/theme.js';
 import { fmtMoney, fmtDate, toast, today } from '../core/utils.js';
-import { listVentas, createVenta, updateVenta, deleteVenta } from '../services/ventas.js';
+import { listVentas, createVenta, updateVenta, deleteVenta, calcKpis, PERIODOS, getPeriodoActual, setPeriodoActual, calcularRango } from '../services/ventas.js';
 import { listProductos } from '../services/productos.js';
 import { getCotizacionHoy } from '../services/cotizacion.js';
 
@@ -19,8 +19,9 @@ async function init() {
 }
 
 async function cargarDatos() {
+  const rango = calcularRango(getPeriodoActual());
   [_ventas, _productos, _cotizacion] = await Promise.all([
-    listVentas().catch(() => []),
+    listVentas({ desde: rango.desde, hasta: rango.hasta }).catch(() => []),
     listProductos(true).catch(() => []),
     getCotizacionHoy().catch(() => null),
   ]);
@@ -30,12 +31,17 @@ function render() {
   const main = document.querySelector('.main');
   if (!main) return;
   main.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
       <div>
         <h2 style="margin:0;">Ventas</h2>
-        <p style="margin:4px 0 0;color:var(--text-muted);font-size:.85rem;">${_ventas.length} registros totales</p>
+        <p style="margin:4px 0 0;color:var(--text-muted);font-size:.85rem;">${_ventas.length} registros · ${PERIODOS[getPeriodoActual()]?.label}</p>
       </div>
-      <button class="btn btn--primary" id="btnNuevaVenta">+ Nueva venta</button>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <select id="selectPeriodo" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:.85rem;cursor:pointer;">
+          ${Object.entries(PERIODOS).map(([k,v])=>`<option value="${k}" ${k===getPeriodoActual()?'selected':''}>${v.label}</option>`).join('')}
+        </select>
+        <button class="btn btn--primary" id="btnNuevaVenta">+ Nueva venta</button>
+      </div>
     </div>
 
     <div class="card" style="overflow-x:auto;">
