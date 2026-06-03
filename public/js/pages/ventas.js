@@ -4,7 +4,7 @@ import { initTheme } from '../core/theme.js';
 import { fmtMoney, fmtDate, toast, today } from '../core/utils.js';
 import { listVentas, createVenta, updateVenta, deleteVenta, calcKpis, PERIODOS, getPeriodoActual, setPeriodoActual, calcularRango } from '../services/ventas.js';
 import { listProductos } from '../services/productos.js';
-import { getCotizacionHoy } from '../services/cotizacion.js';
+import { getCotizacionHoy, arsToUsd } from '../services/cotizacion.js';
 
 let _ventas = [], _productos = [], _cotizacion = null, _editId = null;
 
@@ -51,13 +51,13 @@ function render() {
             <th>Fecha</th><th>Producto</th><th>Cant.</th>
             <th>Precio unit.</th><th>Bruto</th>
             <th>Desc. ML</th><th>Desc. IIBB</th><th>Desc. Otros</th>
-            <th>Neto recibido</th><th>Ganancia</th>
+            <th>Neto recibido</th><th>Neto USD</th><th>Ganancia</th>
             <th>Canal</th><th>Cliente</th><th></th>
           </tr>
         </thead>
         <tbody>
           ${_ventas.length === 0
-            ? `<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:32px;">Sin ventas registradas</td></tr>`
+            ? `<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:32px;">Sin ventas registradas</td></tr>`
             : _ventas.map(v => {
                 const bruto  = (v.precio_unitario_ars || 0) * (v.cantidad || 1);
                 const dML    = Number(v.descuento_ml_ars    || 0);
@@ -77,6 +77,7 @@ function render() {
                   <td style="color:var(--danger,#e53935);">${dIIBB > 0 ? '-'+fmtMoney(dIIBB) : '—'}</td>
                   <td style="color:var(--danger,#e53935);">${dOtros > 0 ? '-'+fmtMoney(dOtros) : '—'}</td>
                   <td><strong>${fmtMoney(neto)}</strong></td>
+                  <td style="color:var(--text-muted);font-size:.85rem;">${_cotizacion?.valor_ars > 0 ? 'US$ ' + (neto/_cotizacion.valor_ars).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}) : '—'}</td>
                   <td style="color:${ganancia>=0?'var(--success)':'var(--danger,#e53935)'};font-weight:600;">${fmtMoney(ganancia)}</td>
                   <td><span class="badge">${v.canal}</span></td>
                   <td>${v.cliente_nombre ?? '—'}</td>

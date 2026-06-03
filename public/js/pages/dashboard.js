@@ -52,7 +52,7 @@ function render() {
   const serie = calcSerie(_ventas);
   const ultimasVentas = _ventas.slice(0, 5);
   const margen = kpi.bruto > 0 ? ((kpi.ganancia / kpi.bruto) * 100).toFixed(1) : '0';
-  const cotVal = _cotizacion?.valor_ars || 1000;
+  const cotVal = _cotizacion?.valor_ars || 1200;
   const cotLabel = `USD blue $${cotVal.toLocaleString('es-AR')}`;
 
   main.innerHTML = `
@@ -85,9 +85,9 @@ function render() {
         <div class="kpi-card__sub">Margen ${margen}%</div>
       </div>
       <div class="card kpi-card">
-        <div class="kpi-card__label">COTIZACIÓN</div>
-        <div class="kpi-card__value" style="font-size:1.4rem;">${cotLabel}</div>
-        <div class="kpi-card__sub">dolar blue hoy</div>
+        <div class="kpi-card__label">COTIZACIÓN BLUE</div>
+        <div class="kpi-card__value" style="font-size:1.4rem;">$${cotVal.toLocaleString('es-AR')}</div>
+        <div class="kpi-card__sub">Ganancia: US$ ${cotVal > 0 ? (kpi.ganancia/cotVal).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}) : '—'}</div>
       </div>
     </div>
 
