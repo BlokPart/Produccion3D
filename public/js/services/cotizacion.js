@@ -1,45 +1,57 @@
-// ============================================================================
-// COTIZACION — ARS ⇄ USD con caché en Supabase
-// ============================================================================
-
 import { supabase } from '../config/supabase.js';
 import { today } from '../core/utils.js';
 
-/**
- * Obtiene la cotización vigente. Estrategia:
- *   1. Buscar en tabla `cotizaciones_usd` la fila de hoy.
- *   2. Si no existe, llamar a dolarapi.com y persistirla (vía Worker, no directo desde browser por CORS).
- *   3. Si falla todo, usar la última cotización conocida.
- */
+/** Trae cotización de hoy. Si no existe en DB, la busca en dolarapi.com */
 export async function getCotizacionHoy() {
   const hoy = today();
+
+  // 1. Buscar en DB
   const { data } = await supabase
     .from('cotizaciones_usd')
     .select('*')
+    .eq('tipo', 'blue')
     .eq('fecha', hoy)
     .maybeSingle();
 
-  if (data) return data;
+  if (data?.valor_ars) return data;
 
-  // Fallback: la última disponible
+  // 2. Intentar traer de dolarapi.com directamente (tiene CORS abierto)
+  try {
+    const r = await fetch('https://dolarapi.com/v1/dolares/blue');
+    if (r.ok) {
+      const d = await r.json();
+      const valor = Number(d.venta || d.compra || 0);
+      if (valor > 0) {
+        const row = { fecha: hoy, tipo: 'blue', valor_ars: valor, fuente: 'dolarapi.com' };
+        await supabase.from('cotizaciones_usd')
+          .upsert(row, { onConflict: 'fecha,tipo' }).select().maybeSingle();
+        return { ...row };
+      }
+    }
+  } catch (_) { /* CORS o red, ignorar */ }
+
+  // 3. Última cotización disponible
   const { data: last } = await supabase
     .from('cotizaciones_usd')
     .select('*')
+    .eq('tipo', 'blue')
     .order('fecha', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  return last || { blue_venta: 1000, oficial_venta: 1000 }; // fallback de emergencia
+  return last ?? { valor_ars: 1200, tipo: 'blue', fecha: hoy };
 }
 
-/** Convierte ARS → USD usando el valor blue venta del día (o uno dado). */
+/** ARS → USD */
 export function arsToUsd(montoArs, cotizacion) {
-  if (!cotizacion?.blue_venta) return null;
-  return montoArs / cotizacion.blue_venta;
+  const v = cotizacion?.valor_ars;
+  if (!v) return null;
+  return montoArs / v;
 }
 
-/** Convierte USD → ARS. */
+/** USD → ARS */
 export function usdToArs(montoUsd, cotizacion) {
-  if (!cotizacion?.blue_venta) return null;
-  return montoUsd * cotizacion.blue_venta;
+  const v = cotizacion?.valor_ars;
+  if (!v) return null;
+  return montoUsd * v;
 }
