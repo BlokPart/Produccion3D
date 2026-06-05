@@ -2,6 +2,7 @@ import { requireAuth } from '../core/auth.js';
 import { mountLayout } from '../core/layout.js';
 import { initTheme } from '../core/theme.js';
 import { fmtDate, toast, today } from '../core/utils.js';
+import { showModal, closeModal } from '../core/modal.js';
 import { listProduccion, createProduccion, deleteProduccion } from '../services/produccion.js';
 import { listProductos } from '../services/productos.js';
 import { listFilamentos } from '../services/filamentos.js';
@@ -26,137 +27,129 @@ function render() {
   const main = document.querySelector('.main');
   if (!main) return;
 
-  const unidades = _produccion.reduce((s, p) => s + Number(p.cantidad_producida ?? 0), 0);
-  const gramosUsados = _produccion.reduce((s, p) => s + Number(p.peso_filamento_usado_g ?? 0), 0);
+  const totalUnidades = _produccion.reduce((s, p) => s + Number(p.cantidad_producida||0), 0);
+  const totalGr       = _produccion.reduce((s, p) => s + Number(p.peso_filamento_usado_g||0), 0);
 
   main.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
       <div>
-        <h2 style="margin:0;">Producción</h2>
-        <p style="margin:4px 0 0;color:var(--text-muted);font-size:.85rem;">
-          ${unidades} unidades producidas · ${gramosUsados.toFixed(0)} g de filamento usados
-        </p>
+        <h2 style="margin:0 0 2px;">Producción</h2>
+        <p style="margin:0;font-size:.82rem;color:var(--text-muted);">${_produccion.length} lotes registrados</p>
       </div>
       <button class="btn btn--primary" id="btnNuevo">+ Registrar lote</button>
     </div>
 
-    <div class="card" style="overflow-x:auto;">
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;">
+      ${[
+        { label:'Unidades producidas', val: totalUnidades.toLocaleString('es-AR') + ' u.' },
+        { label:'Filamento usado',     val: (totalGr/1000).toFixed(2) + ' kg' },
+        { label:'Lotes totales',       val: _produccion.length },
+      ].map(k => `<div class="card" style="padding:12px 16px;">
+        <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:3px;">${k.label}</div>
+        <div style="font-size:1rem;font-weight:700;">${k.val}</div>
+      </div>`).join('')}
+    </div>
+
+    <!-- Tabla -->
+    <div class="card" style="overflow-x:auto;padding:0;">
       <table class="data-table">
         <thead>
           <tr>
             <th>Fecha</th><th>Producto</th><th>Filamento</th>
             <th>Cant. producida</th><th>Filamento usado</th>
-            <th>Duración (min)</th><th>Notas</th><th></th>
+            <th>Duración</th><th>Notas</th><th style="width:50px;"></th>
           </tr>
         </thead>
         <tbody>
           ${_produccion.length === 0
-            ? `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px;">Sin lotes registrados</td></tr>`
+            ? `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px;">Sin lotes registrados.</td></tr>`
             : _produccion.map(p => `<tr>
-                <td>${fmtDate(p.fecha)}</td>
-                <td>${p.productos?.nombre ?? '—'}</td>
-                <td>${p.filamentos?.nombre ?? '—'}
-                  <br><small style="color:var(--text-muted);">${p.filamentos?.color ?? ''}</small></td>
-                <td><strong>${p.cantidad_producida}</strong> u.</td>
-                <td>${p.peso_filamento_usado_g ?? 0} g</td>
-                <td>${p.duracion_impresion_min ?? '—'}</td>
-                <td>${p.notas ?? '—'}</td>
-                <td><button class="btn btn--ghost btn--sm" data-del="${p.id}">✕</button></td>
+                <td style="white-space:nowrap;">${fmtDate(p.fecha)}</td>
+                <td><strong>${p.productos?.nombre ?? '—'}</strong></td>
+                <td>
+                  <div>${p.filamentos?.nombre ?? '—'}</div>
+                  ${p.filamentos?.color ? `<div style="font-size:.75rem;color:var(--text-muted);">${p.filamentos.color}</div>` : ''}
+                </td>
+                <td style="text-align:center;font-weight:700;">${p.cantidad_producida} u.</td>
+                <td>${p.peso_filamento_usado_g ? Number(p.peso_filamento_usado_g).toFixed(0) + ' g' : '—'}</td>
+                <td style="color:var(--text-muted);">${p.duracion_impresion_min ? p.duracion_impresion_min + ' min' : '—'}</td>
+                <td style="color:var(--text-muted);font-size:.82rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.notas??''}">${p.notas??'—'}</td>
+                <td><button class="btn btn--ghost btn--sm" data-del="${p.id}" title="Eliminar">✕</button></td>
               </tr>`).join('')}
         </tbody>
       </table>
     </div>
-
-    <div id="modal-overlay" class="modal-overlay" style="display:none;">
-      <div class="modal">
-        <div class="modal__header">
-          <h3 class="modal__title">Registrar lote de producción</h3>
-          <button class="modal__close" id="btnCerrarModal">✕</button>
-        </div>
-        <div class="modal__body">
-          <form id="formProduccion">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-              <label class="form-group"><span>Fecha *</span>
-                <input type="date" name="fecha" required value="${today()}">
-              </label>
-              <label class="form-group"><span>Cantidad producida *</span>
-                <input type="number" name="cantidad_producida" min="1" value="1" required>
-              </label>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-              <label class="form-group"><span>Producto *</span>
-                <select name="producto_id" required>
-                  <option value="">Seleccioná...</option>
-                  ${_productos.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('')}
-                </select>
-              </label>
-              <label class="form-group"><span>Filamento usado *</span>
-                <select name="filamento_id" required>
-                  <option value="">Seleccioná...</option>
-                  ${_filamentos.map(f => `<option value="${f.id}">${f.nombre} (${(f.stock_actual_g??0).toFixed(0)}g disp.)</option>`).join('')}
-                </select>
-              </label>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-              <label class="form-group"><span>Peso filamento usado (g)</span>
-                <input type="number" name="peso_filamento_usado_g" step="0.1" min="0" placeholder="0">
-              </label>
-              <label class="form-group"><span>Duración impresión (min)</span>
-                <input type="number" name="duracion_impresion_min" min="0" placeholder="ej: 120">
-              </label>
-            </div>
-            <label class="form-group"><span>Notas</span>
-              <textarea name="notas" rows="2" placeholder="Observaciones del lote..."></textarea>
-            </label>
-          </form>
-        </div>
-        <div class="modal__footer">
-          <button class="btn btn--ghost" id="btnCancelar">Cancelar</button>
-          <button class="btn btn--primary" id="btnGuardar">Registrar</button>
-        </div>
-      </div>
-    </div>
   `;
 
-  document.getElementById('btnNuevo').addEventListener('click', () => {
-    document.getElementById('modal-overlay').style.display = 'flex';
-    if (_productos.length === 0) toast('Primero creá productos en el inventario', 'warning');
-  });
-  document.getElementById('btnCerrarModal').addEventListener('click', cerrarModal);
-  document.getElementById('btnCancelar').addEventListener('click', cerrarModal);
-  document.getElementById('btnGuardar').addEventListener('click', guardar);
-
+  document.getElementById('btnNuevo').addEventListener('click', () => abrirModal());
   main.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('¿Eliminar este lote?')) return;
       await deleteProduccion(btn.dataset.del).catch(e => toast(e.message, 'error'));
-      _produccion = await listProduccion();
+      _produccion = await listProduccion().catch(() => []);
       render();
     });
   });
 }
 
-function cerrarModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+function abrirModal() {
+  const sinProductos   = _productos.length === 0;
+  const sinFilamentos  = _filamentos.length === 0;
 
-async function guardar() {
-  const fd = new FormData(document.getElementById('formProduccion'));
-  const payload = {
-    fecha: fd.get('fecha'),
-    producto_id: fd.get('producto_id') || null,
-    filamento_id: fd.get('filamento_id') || null,
-    cantidad_producida: Number(fd.get('cantidad_producida')),
-    peso_filamento_usado_g: Number(fd.get('peso_filamento_usado_g') || 0) || null,
-    duracion_impresion_min: Number(fd.get('duracion_impresion_min') || 0) || null,
-    notas: fd.get('notas') || null,
-  };
-  if (!payload.fecha || !payload.cantidad_producida) return toast('Completá los campos obligatorios', 'error');
+  if (sinProductos)  toast('Primero creá productos en Inventario → Productos', 'warning');
+  if (sinFilamentos) toast('Primero registrá filamentos en Inventario → Filamentos', 'warning');
+
+  showModal({
+    icon: '🖨️',
+    title: 'Registrar lote de producción',
+    subtitle: 'Nuevo lote impreso',
+    saveLabel: '💾 Registrar lote',
+    sections: [
+      {
+        title: 'Qué imprimiste',
+        cols: 2,
+        fields: [
+          { name:'fecha', label:'Fecha de producción', type:'date', required:true, value: today() },
+          { name:'cantidad_producida', label:'Unidades producidas', type:'number', required:true, min:1, value:1 },
+          { name:'producto_id', label:'Producto fabricado', type:'select', required:true,
+            options: _productos.map(p => ({ value: p.id, label: p.nombre })) },
+          { name:'filamento_id', label:'Filamento utilizado', type:'select', required:true,
+            options: _filamentos.map(f => ({ value: f.id, label: `${f.nombre} — Stock: ${(f.stock_actual_g||0).toFixed(0)}g disp.` })) },
+        ]
+      },
+      {
+        title: 'Consumo y tiempo',
+        cols: 2,
+        fields: [
+          { name:'peso_filamento_usado_g',  label:'Filamento usado (g)',    type:'number', step:'0.1', min:0, placeholder:'0', hint:'Gramos consumidos en este lote' },
+          { name:'duracion_impresion_min',  label:'Duración impresión (min)', type:'number', min:0, placeholder:'120', hint:'Tiempo total de impresión' },
+          { name:'notas', label:'Notas del lote', type:'textarea', width:'full', placeholder:'Observaciones sobre calidad, problemas, ajustes...' },
+        ]
+      }
+    ],
+    onSave: guardar,
+  });
+}
+
+async function guardar(fd) {
+  if (!fd.producto_id || !fd.filamento_id || !fd.cantidad_producida)
+    return toast('Completá producto, filamento y cantidad', 'error');
   try {
-    await createProduccion(payload);
+    await createProduccion({
+      fecha:                   fd.fecha,
+      producto_id:             fd.producto_id || null,
+      filamento_id:            fd.filamento_id || null,
+      cantidad_producida:      Number(fd.cantidad_producida),
+      peso_filamento_usado_g:  Number(fd.peso_filamento_usado_g || 0) || null,
+      duracion_impresion_min:  Number(fd.duracion_impresion_min || 0) || null,
+      notas:                   fd.notas || null,
+    });
     toast('Lote registrado');
-    cerrarModal();
-    _produccion = await listProduccion();
+    closeModal();
+    _produccion = await listProduccion().catch(() => []);
     render();
-  } catch (e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 init();
