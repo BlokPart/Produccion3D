@@ -500,3 +500,61 @@
   .mf__header { padding: 16px 16px 14px; }
   .mf__footer { padding: 12px 16px; }
 }
+
+/* ── mf dark mode overrides ───────────────────────────────────────── */
+[data-theme="dark"] .mf {
+  background: #1c2129;
+  color: #e8eaf0;
+  box-shadow: 0 24px 64px rgba(0,0,0,.6), 0 4px 16px rgba(0,0,0,.4);
+}
+[data-theme="dark"] .mf__header {
+  border-bottom-color: #2d333d;
+  background: linear-gradient(135deg, rgba(255,138,30,.08) 0%, transparent 60%);
+}
+[data-theme="dark"] .mf__title  { color: #e8eaf0; }
+[data-theme="dark"] .mf__sub    { color: #8892a4; }
+[data-theme="dark"] .mf__close  { color: #8892a4; }
+[data-theme="dark"] .mf__close:hover { background: rgba(255,255,255,.07); color: #e8eaf0; }
+[data-theme="dark"] .mf__label  { color: #8892a4; }
+[data-theme="dark"] .mf__input {
+  background: #0e1014;
+  color: #e8eaf0;
+  border-color: #2d333d;
+}
+[data-theme="dark"] .mf__input:focus {
+  border-color: #ff8a1e;
+  box-shadow: 0 0 0 3px rgba(255,138,30,.15);
+}
+[data-theme="dark"] .mf__input::placeholder { color: #4a5568; }
+[data-theme="dark"] .mf__hint   { color: #8892a4; }
+[data-theme="dark"] .mf-section__title { color: #ff8a1e; border-bottom-color: #2d333d; }
+[data-theme="dark"] .mf-divider { color: #4a5568; border-bottom-color: #2d333d; }
+[data-theme="dark"] .mf-note {
+  background: rgba(255,255,255,.04);
+  border-color: #2d333d;
+  color: #8892a4;
+}
+[data-theme="dark"] .mf__footer {
+  background: rgba(255,255,255,.03);
+  border-top-color: #2d333d;
+}
+
+/* ── mf light mode explícito ─────────────────────────────────────── */
+[data-theme="light"] .mf {
+  background: #ffffff;
+  color: #1a1c23;
+}
+[data-theme="light"] .mf__header { border-bottom-color: #e5e7eb; }
+[data-theme="light"] .mf__label  { color: #6b7280; }
+[data-theme="light"] .mf__input {
+  background: #f9fafb;
+  color: #1a1c23;
+  border-color: #d1d5db;
+}
+[data-theme="light"] .mf__input:focus {
+  border-color: #2453ff;
+  box-shadow: 0 0 0 3px rgba(36,83,255,.1);
+  background: #fff;
+}
+[data-theme="light"] .mf-section__title { color: #2453ff; border-bottom-color: #e5e7eb; }
+[data-theme="light"] .mf__footer { background: #f9fafb; border-top-color: #e5e7eb; }
